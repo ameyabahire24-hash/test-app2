@@ -1,60 +1,64 @@
 import streamlit as st
-import math
-import re
-import ast
-import operator
+import math, re, ast, operator
 
-# ---------------- Page config ----------------
-st.set_page_config(page_title="Casio fx-991 Ultra Fast", page_icon="🧮", layout="centered")
+# ---------------- Page Setup ----------------
+st.set_page_config(page_title="Casio fx-991 | Ultra-Fast", page_icon="🧮", layout="centered")
 
-# ---------------- Minimal Styles ----------------
+# ---------------- CSS Styling ----------------
 st.markdown("""
 <style>
 body {
-    background-color: #0e1117;
-    color: #f1f1f1;
-    font-family: "Roboto Mono", monospace;
+    background: radial-gradient(circle at top, #0a0f18, #010409);
+    font-family: 'Orbitron', sans-serif;
+    color: #00eaff;
 }
 .calc-container {
-    background: linear-gradient(145deg, #131820, #0e1117);
     width: 380px;
     margin: auto;
-    border-radius: 20px;
-    padding: 18px;
-    box-shadow: 0 0 30px rgba(0,255,255,0.3);
+    padding: 20px 25px 30px 25px;
+    border-radius: 25px;
+    background: rgba(15, 25, 40, 0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 25px rgba(0,255,255,0.2);
 }
 .display {
-    background-color: #05080d;
-    color: #00ffc6;
+    background: linear-gradient(145deg, #030608, #0b1118);
+    color: #00ffc8;
     border-radius: 10px;
     text-align: right;
     font-size: 1.8rem;
     padding: 14px;
-    border: 1px solid rgba(0,255,255,0.2);
-    margin-bottom: 12px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(0,255,255,0.25);
     overflow-x: auto;
 }
-.btn {
-    background-color: #1c212b;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    height: 48px;
-    font-size: 1.05rem;
-    transition: all 0.1s ease-in-out;
-}
-.btn:hover {
-    background-color: #00ffff;
-    color: #000;
-}
-.btn.orange { background-color: #ffb347; color: #1b1000; font-weight: bold; }
-.btn.blue { background-color: #00b3b3; color: #fff; font-weight: bold; }
 .title {
     text-align: center;
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     color: #00ffff;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
+button[kind="primary"] {
+    transition: transform 0.05s ease-in-out;
+}
+button[kind="primary"]:active {
+    transform: scale(0.96);
+}
+.btn {
+    background-color: #1a1f28 !important;
+    color: #e6e6e6 !important;
+    border-radius: 8px !important;
+    height: 45px !important;
+    font-size: 1rem !important;
+    border: 0.5px solid rgba(0,255,255,0.15) !important;
+}
+.btn:hover {
+    background-color: #00ffff !important;
+    color: #000 !important;
+}
+.btn-orange { background-color: #ffaa33 !important; color: #000 !important; font-weight: bold; }
+.btn-blue { background-color: #00b3ff !important; color: #fff !important; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -68,29 +72,20 @@ if "memory" not in st.session_state:
 if "display" not in st.session_state:
     st.session_state.display = "0"
 
-# ---------------- Safe evaluator ----------------
+# ---------------- Safe Evaluation ----------------
 _ops = {
-    ast.Add: operator.add,
-    ast.Sub: operator.sub,
-    ast.Mult: operator.mul,
-    ast.Div: operator.truediv,
-    ast.Pow: operator.pow,
-    ast.USub: operator.neg,
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg,
     ast.UAdd: operator.pos,
 }
 
 def make_names(mode):
     funcs = {
-        "sqrt": math.sqrt,
-        "log": math.log10,
-        "ln": math.log,
+        "sqrt": math.sqrt, "log": math.log10, "ln": math.log,
         "sin": math.sin if mode == "RAD" else lambda x: math.sin(math.radians(x)),
         "cos": math.cos if mode == "RAD" else lambda x: math.cos(math.radians(x)),
         "tan": math.tan if mode == "RAD" else lambda x: math.tan(math.radians(x)),
-        "pi": math.pi,
-        "e": math.e,
-        "factorial": math.factorial,
-        "abs": abs,
+        "pi": math.pi, "e": math.e, "factorial": math.factorial, "abs": abs
     }
     return funcs
 
@@ -113,25 +108,19 @@ def safe_eval(expr, mode):
         return "Error"
 
 def _eval(node, names):
-    if isinstance(node, ast.BinOp):
-        return _ops[type(node.op)](_eval(node.left, names), _eval(node.right, names))
-    if isinstance(node, ast.UnaryOp):
-        return _ops[type(node.op)](_eval(node.operand, names))
-    if isinstance(node, ast.Call):
-        func = names.get(node.func.id)
-        args = [_eval(a, names) for a in node.args]
-        return func(*args)
-    if isinstance(node, ast.Name):
-        return names[node.id]
-    if isinstance(node, ast.Constant):
-        return node.value
+    if isinstance(node, ast.BinOp): return _ops[type(node.op)](_eval(node.left, names), _eval(node.right, names))
+    if isinstance(node, ast.UnaryOp): return _ops[type(node.op)](_eval(node.operand, names))
+    if isinstance(node, ast.Call): return names.get(node.func.id)(*_eval_args(node.args, names))
+    if isinstance(node, ast.Name): return names[node.id]
+    if isinstance(node, ast.Constant): return node.value
     return None
 
-# ---------------- Fast update functions ----------------
+def _eval_args(args, names): return [_eval(a, names) for a in args]
+
+# ---------------- Update Functions ----------------
 def press(k):
     if k == "C":
-        st.session_state.expr = ""
-        st.session_state.display = "0"
+        st.session_state.expr, st.session_state.display = "", "0"
     elif k == "=":
         res = safe_eval(st.session_state.expr, st.session_state.mode)
         st.session_state.display = str(res)
@@ -155,7 +144,7 @@ def press(k):
 
 # ---------------- UI ----------------
 st.markdown("<div class='calc-container'>", unsafe_allow_html=True)
-st.markdown("<div class='title'>CASIO fx-991 | Fast Mode</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>CASIO fx-991 | Hyper-Fast Mode</div>", unsafe_allow_html=True)
 st.markdown(f"<div class='display'>{st.session_state.display}</div>", unsafe_allow_html=True)
 
 rows = [
@@ -177,10 +166,33 @@ for r in rows:
             cols[i].write("")
         else:
             css = "btn"
-            if key in ["=", "C"]: css += " orange"
-            elif key in ["MC", "MR", "M+", "M-", "DEG/RAD"]: css += " blue"
-            if cols[i].button(key, key=f"{key}-{i}"):
+            if key in ["=", "C"]: css += " btn-orange"
+            elif key in ["MC", "MR", "M+", "M-", "DEG/RAD"]: css += " btn-blue"
+            if cols[i].button(key, key=f"{key}-{i}", use_container_width=True):
                 press(key)
 
 st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;color:#888;'>Made with ❤️ using Streamlit</p>", unsafe_allow_html=True)
+
+# ---------------- JavaScript Live Update (instant typing feel) ----------------
+st.markdown("""
+<script>
+const display = window.parent.document.querySelector('.display');
+let buffer = '';
+document.addEventListener('keydown', (e) => {
+  if(/^[0-9.+\\-*/()^]$/.test(e.key)) {
+    buffer += e.key;
+    display.innerText = buffer;
+    window.parent.postMessage({type: 'key', value: e.key}, '*');
+  }
+  if(e.key === 'Enter'){
+    window.parent.postMessage({type: 'key', value: '='}, '*');
+  }
+  if(e.key === 'Backspace'){
+    buffer = buffer.slice(0,-1);
+    display.innerText = buffer || '0';
+  }
+});
+</script>
+""", unsafe_allow_html=True)
+
+st.markdown("<p style='text-align:center;color:#777;'>Made with ❤️ by Ameya | Streamlit Casio fx-991</p>", unsafe_allow_html=True)
